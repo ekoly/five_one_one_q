@@ -30,7 +30,7 @@ while not my_q.empty():
 
 print(results)
 ```
-We would expect the following output (lowest priority first, and first in if there is a priority tie):
+We would expect the following output (lowest priority first, and FIFO if there is a priority tie):
 ```
 [(2, 1),
  (2, 4),
