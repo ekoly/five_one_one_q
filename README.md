@@ -1,60 +1,109 @@
-# five_one_one_q
-C-backed priority queue implementation, with support for a sort-like `key` argument.
+# five-one-one-q
+C-backed priority queue implementation, with support for a sort-like `key`
+argument.
 
-### Current Status
-While `await q.put(item)` and `await q.get()` do not throw errors, items returned by `get()` are not in the expected order.
+### Behavior
+The order of items returned by `await q.get()` is as follows:
+ 1. Lowest value of `key(item)` is first out.
+ 2. If multiple items have a tied value of `key(item)`, FIFO is followed.
 
-The intended order is:
- 1. Items for which `key(item)` is lowest are first out (or highest if `first_out=five_one_one_q.HIGHEST` is given).
- 2. If multiple items have a tied value of `key(item)`, the first in should be the first out.
+If the `first_out=five_one_one_q.HIGHEST` keyword argument is given to the
+constructor, the highest `key(item)` is first out.
 
-In other words, if we run the following (in an environment where `await` is usable):
+For items `put` into the queue, `key(item)` must support the `<` operator, or
+the `>` operator if `first_out` is set to `HIGHEST`.
+
+### Examples
+
+The following assume an environment that supports `await`.
+
+First:
+```
+import operator
+import five_one_one_q
+
+my_q = five_one_one_q.PriorityQueue(key=operator.itemgetter(0), first_out=five_one_one_q.LOWEST)
+
+await my_q.put((3, "Alice"))
+await my_q.put((1, "Eve"))
+await my_q.put((2, "Bob"))
+
+results = []
+while not my_q.empty():
+    item = await my_q.get()
+    results.append(item)
+
+print(results)
+```
+Will output the following:
+```
+[(1, 'Eve'), (2, 'Bob'), (3, 'Alice')]
+```
+
+Second:
 ```
 import operator
 import random
-
 import five_one_one_q
 
 my_q = five_one_one_q.PriorityQueue(key=operator.itemgetter(0), first_out=five_one_one_q.LOWEST)
 
 
-for counter in range(10):
-    # first value is the priority, second indicates the place in the queue
-    await my_q.put((random.randint(1, 10), counter))
+for item_counter in range(20):
+    # first item is a randomized priority
+    # second item would be the place in a non-priority queue
+    await my_q.put((random.randint(1, 3), item_counter))
 
 results = []
-
 while not my_q.empty():
-    res = await my_q.get()
-    results.append(res)
+    item = await my_q.get()
+    results.append(item)
 
 print(results)
 ```
-We would expect the following output (lowest priority first, and FIFO if there is a priority tie):
+Will output the following:
 ```
-[(2, 1),
- (2, 4),
- (2, 8),
- (3, 0),
- (3, 6),
- (3, 7),
- (4, 5),
- (5, 3),
- (8, 2),
- (9, 9)]
-```
-What we see in the current state is:
-```
-[(2, 1),
- (2, 4),
- (2, 8),
- (3, 6), # 6th in, yet comes out before 0th in
- (3, 0), # 0th in, yet comes out after 6th in
- (3, 7),
- (4, 5),
- (5, 3),
- (8, 2),
- (9, 9)]
+# Lowest priority first out
+# Tied priority, first in first out
+[(1, 1), (1, 2), (1, 5), (1, 7), (1, 8), (1, 14), (1, 18), (2, 3), (2, 4), (2, 9), (2, 11), (2, 12), (3, 0), (3, 6), (3, 10), (3, 13), (3, 15), (3, 16), (3, 17), (3, 19)]
 ```
 
-This problem is due to my own misunderstanding of the behavior of heaps and will require significant changes to fix.
+Third:
+```
+import operator
+import random
+import five_one_one_q
+
+my_q = five_one_one_q.PriorityQueue(key=operator.itemgetter(0), first_out=five_one_one_q.LOWEST)
+
+
+for item_counter in range(20, 0, -1):
+    # first item is a randomized priority
+    # second item would be the REVERSED place in a non-priority queue
+    await my_q.put((random.randint(1, 3), item_counter))
+
+results = []
+while not my_q.empty():
+    item = await my_q.get()
+    results.append(item)
+
+print(results)
+```
+Will output the following:
+```
+# Lowest priority first out
+# Tied priority, first in first out
+[(1, 19), (1, 10), (1, 7), (1, 6), (1, 4), (1, 3), (2, 20), (2, 17), (2, 16), (2, 15), (2, 9), (2, 5), (2, 1), (3, 18), (3, 14), (3, 13), (3, 12), (3, 11), (3, 8), (3, 2)]
+```
+
+
+### Current Status
+
+I have not seen unexpected exceptions being raised by `await get()` or
+`await put(item)` in the current iteration. The order out is as expected.
+
+This code currently does not have a unit test suite. This should be coming
+soon.
+
+This is a C-backed library meaning that object reference counts need to be
+handled manually. The library needs to be rigorously checked for memory leaks.
