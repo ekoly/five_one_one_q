@@ -34,6 +34,7 @@ class PriorityQueue(asyncio.Queue):
                 `five_one_one_q.HIGHEST`. Defaults to LOWEST.
         """
         super().__init__(**kwargs)
+        self._first_out = first_out
         self._queue = five_one_one_q.c.bucketq(key=key, first_out=first_out)
 
     def _init(self, maxsize: int):
@@ -46,9 +47,7 @@ class PriorityQueue(asyncio.Queue):
         return self._queue.pop()
 
     def _get_loop(self):
-
         loop = asyncio.get_running_loop()
-
         if self._loop is None:
             with _global_lock:
                 if self._loop is None:
@@ -56,3 +55,7 @@ class PriorityQueue(asyncio.Queue):
         if self._loop is not loop:
             raise RuntimeError("Event loop changed!")
         return loop
+
+    @property
+    def first_out(self):
+        return self._first_out

@@ -388,14 +388,10 @@ static int foo_bucketq_push_imp(PyObject *self, PyObject *buckets, PyObject *ite
     }
 
     if (pos >= size) {
+        // special case where new bucket needs to be appended
         deq = foo_bucketq_new_deque();
-        if (deq == NULL) {
-            Py_DECREF(item_key);
-            return -1;
-        }
-        bucket = PyTuple_New(2);
-        PyTuple_SET_ITEM(bucket, 0, item_key);
-        PyTuple_SET_ITEM(bucket, 1, deq);
+        bucket = Py_BuildValue("(OO)", item_key, deq);
+        // if either of the above calls returned NULL, will be caught here
         if (PyList_Append(buckets, bucket) != 0) {
             Py_DECREF(item_key);
             Py_DECREF(bucket);
@@ -416,13 +412,8 @@ static int foo_bucketq_push_imp(PyObject *self, PyObject *buckets, PyObject *ite
         } else {
             // need new bucket
             deq = foo_bucketq_new_deque();
-            if (deq == NULL) {
-                Py_DECREF(item_key);
-                return -1;
-            }
-            bucket = PyTuple_New(2);
-            PyTuple_SET_ITEM(bucket, 0, item_key);
-            PyTuple_SET_ITEM(bucket, 1, deq);
+            bucket = Py_BuildValue("(OO)", item_key, deq);
+            // if either of the above calls returned NULL, will be caught here
             if (PyList_Insert(buckets, pos, bucket) != 0) {
                 Py_DECREF(item_key);
                 Py_DECREF(bucket);
