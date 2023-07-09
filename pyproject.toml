@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "five-one-one-q"
+authors = [
+    {name = "ecowley", email = "ecowley@stromsy.com"},
+]
+description = "Python asyncio worker framework with messaging"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["asyncio", "queue", "priorityqueue", "heap", "key", "first_out"]
+license = {text = "MIT License"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = []
+dynamic = ["version"]
