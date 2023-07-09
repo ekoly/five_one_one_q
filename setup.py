@@ -13,7 +13,7 @@ setuptools.setup(
     ext_modules=[
         setuptools.Extension(
             "five_one_one_q.c",
-            ["c/heapq.c"],
+            ["c/bucketq.c"],
         ),
     ],
 )

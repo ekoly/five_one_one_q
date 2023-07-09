@@ -34,7 +34,7 @@ class PriorityQueue(asyncio.Queue):
                 `five_one_one_q.HIGHEST`. Defaults to LOWEST.
         """
         super().__init__(**kwargs)
-        self._queue = five_one_one_q.c.heapq(key=key, first_out=first_out)
+        self._queue = five_one_one_q.c.bucketq(key=key, first_out=first_out)
 
     def _init(self, maxsize: int):
         pass
