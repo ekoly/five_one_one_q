@@ -10,14 +10,14 @@ The order of items returned by `await q.get()` is as follows:
 If the `first_out=five_one_one_q.HIGHEST` keyword argument is given to the
 constructor, the highest `key(item)` is first out.
 
-For items `put` into the queue, `key(item)` must support the `<` operator, or
-the `>` operator if `first_out` is set to `HIGHEST`.
+For items put into the queue, `key(item)` must support the `<` operator, or
+if if `first_out` is set to `HIGHEST`, the `>` operator.
 
 ### Examples
 
 The following assume an environment that supports `await`.
 
-First:
+#### First:
 ```
 import operator
 import five_one_one_q
@@ -37,10 +37,11 @@ print(results)
 ```
 Will output the following:
 ```
+# Lowest priority first out
 [(1, 'Eve'), (2, 'Bob'), (3, 'Alice')]
 ```
 
-Second:
+#### Second:
 ```
 import operator
 import random
@@ -68,7 +69,7 @@ Will output the following:
 [(1, 1), (1, 2), (1, 5), (1, 7), (1, 8), (1, 14), (1, 18), (2, 3), (2, 4), (2, 9), (2, 11), (2, 12), (3, 0), (3, 6), (3, 10), (3, 13), (3, 15), (3, 16), (3, 17), (3, 19)]
 ```
 
-Third:
+#### Third:
 ```
 import operator
 import random
@@ -99,11 +100,11 @@ Will output the following:
 
 ### Current Status
 
-I have not seen unexpected exceptions being raised by `await get()` or
+I have not seen unexpected exceptions raised by `await get()` or
 `await put(item)` in the current iteration. The order out is as expected.
 
-This code currently does not have a unit test suite. This should be coming
-soon.
+This library currently does not have a unit test suite. It is hoped that this
+is coming soon.
 
 This is a C-backed library meaning that object reference counts need to be
 handled manually. The library needs to be rigorously checked for memory leaks.
