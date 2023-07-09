@@ -315,10 +315,12 @@ static int ensure_collections() {
         }
         _deque_append_str = PyUnicode_FromString("append");
         if (_deque_append_str == NULL) {
+            _collections = NULL;
             return -1;
         }
         _deque_popleft_str = PyUnicode_FromString("popleft");
         if (_deque_popleft_str == NULL) {
+            _collections = NULL;
             return -1;
         }
     }

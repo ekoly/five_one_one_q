@@ -11,7 +11,11 @@ If the `first_out=five_one_one_q.HIGHEST` keyword argument is given to the
 constructor, the highest `key(item)` is first out.
 
 For items put into the queue, `key(item)` must support the `<` operator, or
-if if `first_out` is set to `HIGHEST`, the `>` operator.
+if `first_out` is set to `HIGHEST`, the `>` operator.
+
+This queue implementation is optimized for a small number of unique values of
+`key(item)` for the items in the queue. If the number of unique values of
+`key(item)` is large, the performance will be poor.
 
 ### Examples
 
