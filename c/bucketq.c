@@ -1,6 +1,7 @@
 // Definitions and documentation on bucketq.
 
 #include <Python.h>
+#include <string.h>
 #include "structmember.h"
 #include "bucketq.h"
 
@@ -24,11 +25,13 @@ static PySequenceMethods foo_bucketq_sq_methods = {
 static PyMethodDef foo_bucketq_tp_methods[] = {
     {"push", _PyCFunction_CAST(foo_bucketq_tp_method_push), METH_FASTCALL, "Push an item onto the buckets."},
     {"pop", _PyCFunction_CAST(foo_bucketq_tp_method_pop), METH_FASTCALL, "Pop an item from the buckets and return it."},
+    {"empty", _PyCFunction_CAST(foo_bucketq_tp_method_empty), METH_FASTCALL, "Return True if the queue is empty, and False otherwise."},
     {NULL, NULL, 0, NULL}
 };
 
 // define our members
 static PyMemberDef foo_bucketq_tp_members[] = {
+    {"first_out", T_INT, offsetof(foo_bucketq, first_out), READONLY, ""},
     {"_opid", T_INT, offsetof(foo_bucketq, opid), READONLY, ""},
     {"_buckets", T_OBJECT_EX, offsetof(foo_bucketq, buckets), READONLY, ""},
     {"_keyfunc", T_OBJECT_EX, offsetof(foo_bucketq, keyfunc), READONLY, ""},
@@ -93,37 +96,36 @@ static int foo_bucketq_tp_init(foo_bucketq *self, PyObject *args, PyObject *kwar
 
     // buckets will be a list of 2-tuples of (priority, deque)
     PyObject *buckets, *keyfunc;
-    int opid;
+    int first_out;
 
     static char *kwlist[] = {"key", "first_out", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oi", kwlist, &keyfunc, &opid)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Oi", kwlist, &keyfunc, &first_out)) {
         return -1;
     }
 
     Py_INCREF(keyfunc);
 
-    if (opid != LOWEST && opid != HIGHEST) {
-        Py_INCREF(PyExc_ValueError);
+    if (first_out == LOWEST) {
+        self->opid = Py_LT;
+    } else if (first_out == HIGHEST) {
+        self->opid = Py_GT;
+    } else {
+        Py_DECREF(keyfunc);
         PyErr_SetString(PyExc_ValueError, "first_out must be equal to five_one_one_bucketq.LOWEST or five_one_one_bucketq.HIGHEST");
         return -1;
     }
 
-    if (opid == LOWEST) {
-        self->opid = Py_LT;
-    } else {
-        self->opid = Py_GT;
-    }
+    self->first_out = first_out;
 
     buckets = PyList_New(0);
     if (buckets == NULL) {
+        Py_DECREF(keyfunc);
         return -1;
     }
 
     self->buckets = buckets;
     self->keyfunc = keyfunc;
-
-    Py_INCREF(keyfunc);
 
     return 0;
 
@@ -133,7 +135,6 @@ static void foo_bucketq_tp_clear(foo_bucketq *self) {
 
     Py_XDECREF(self->buckets);
     Py_XDECREF(self->keyfunc);
-    Py_XDECREF(self->logger);
 
 }
 
@@ -239,7 +240,6 @@ static PyObject *foo_bucketq_tp_method_push(PyObject *self, PyObject *const *arg
     int res;
 
     if (nargs != 1) {
-        Py_INCREF(PyExc_TypeError);
         PyErr_SetString(PyExc_TypeError, "push expects exactly 1 argument.");
         return NULL;
     }
@@ -275,7 +275,6 @@ static PyObject *foo_bucketq_tp_method_pop(PyObject *self, PyObject *const *args
     PyObject *buckets, *keyfunc, *res;
 
     if (nargs != 0) {
-        Py_INCREF(PyExc_TypeError);
         PyErr_SetString(PyExc_TypeError, "pop expects exactly 0 argument.");
         return NULL;
     }
@@ -295,6 +294,13 @@ static PyObject *foo_bucketq_tp_method_pop(PyObject *self, PyObject *const *args
         return NULL;
     }
 
+    // this will count empty buckets and if the number has crossed a threshold,
+    // clears empty buckets, and changes cleaning strategy to cleaning immediately
+    // after a bucket becomes empty
+    if (foo_bucketq_calleverypop(self) != 0) {
+        return NULL;
+    }
+
     #if _DEBUG >= 2
     if (foo_bucketq_log_debug_healthcheck(self) != 0) {
         return NULL;
@@ -302,6 +308,38 @@ static PyObject *foo_bucketq_tp_method_pop(PyObject *self, PyObject *const *args
     #endif
 
     return res;
+
+}
+
+static PyObject *foo_bucketq_tp_method_empty(PyObject *self, PyObject *const *args, Py_ssize_t nargs) {
+
+    PyObject *buckets, *bucket, *deq;
+    Py_ssize_t deqsize;
+
+    if (nargs != 0) {
+        PyErr_SetString(PyExc_TypeError, "pop expects exactly 0 argument.");
+        return NULL;
+    }
+
+    buckets = ((foo_bucketq *)self)->buckets;
+    Py_INCREF(buckets);
+
+    for (Py_ssize_t ix = 0; ix < PyList_GET_SIZE(buckets); ix++) {
+        bucket = PyList_GET_ITEM(buckets, ix);
+        Py_INCREF(bucket);
+        deq = PyTuple_GET_ITEM(bucket, 1);
+        Py_DECREF(bucket);
+        Py_INCREF(deq);
+        deqsize = PyObject_Length(deq);
+        Py_DECREF(deq);
+        if (deqsize > 0) {
+            Py_DECREF(buckets);
+            Py_RETURN_FALSE;
+        }
+    }
+
+    Py_DECREF(buckets);
+    Py_RETURN_TRUE;
 
 }
 
@@ -426,7 +464,6 @@ static int foo_bucketq_push_imp(PyObject *self, PyObject *buckets, PyObject *ite
     if (res == NULL) {
         return -1;
     }
-
     Py_DECREF(res);
 
     return 0;
@@ -436,80 +473,226 @@ static int foo_bucketq_push_imp(PyObject *self, PyObject *buckets, PyObject *ite
 static PyObject *foo_bucketq_pop_imp(PyObject *self, PyObject *buckets) {
 
     PyObject *bucket, *deq, *res;
-    Py_ssize_t size;
+    Py_ssize_t size, ix;
+
+    size = PyList_GET_SIZE(buckets);
     
-    if (PyList_GET_SIZE(buckets) == 0) {
-        Py_INCREF(PyExc_IndexError);
+    if (size == 0) {
         PyErr_SetString(PyExc_IndexError, "tried to pop from an empty deque");
         return NULL;
     }
 
-    bucket = PyList_GET_ITEM(buckets, 0);
-    deq = PyTuple_GET_ITEM(bucket, 1);
-    res = PyObject_CallMethodNoArgs(deq, _deque_popleft_str);
+    for (ix = 0; ix < size; ix++) {
+        bucket = PyList_GET_ITEM(buckets, ix);
+        Py_INCREF(bucket);
+        deq = PyTuple_GET_ITEM(bucket, 1);
+        Py_DECREF(bucket);
+        Py_INCREF(deq);
+        // We prefer to call `popleft()` first and then do error handling
+        // in opposed to checking length every iteration
+        res = PyObject_CallMethodNoArgs(deq, _deque_popleft_str);
+        Py_DECREF(deq);
+        if (res != NULL) {
+            break;
+        }
+        PyErr_Clear();
+    }
+
     if (res == NULL) {
+        PyErr_SetString(PyExc_IndexError, "tried to pop from an empty queue");
         return NULL;
     }
 
-    size = PyObject_Length(deq);
-    if (size == 0) {
-        if (PyList_SetSlice(buckets, 0, 1, NULL) != 0) {
-            Py_DECREF(bucket);
+    if (ix > MAX_EMPTY_BUCKETS) {
+        // force an empty bucket check if we are accumulating a lot of empty buckets
+        if (foo_bucketq_periodic_check(self) != 0) {
             return NULL;
         }
+    } else if (((foo_bucketq *)self)->cleaning_strategy == CLEAN_ON_EMPTY) {
+        // if we get here, it is this function's responsibility to clean up
+        // empty deqs
+        size = PyObject_Length(deq);
+        if (size == 0) {
+            if (PyList_SetSlice(buckets, ix, ix+1, NULL) != 0) {
+                Py_DECREF(bucket);
+                return NULL;
+            }
+        }
     }
-
-    Py_INCREF(res);
 
     return res;
 
 }
 
-// logging methods
-static int foo_bucketq_ensure_logger(PyObject *self) {
+static int foo_bucketq_calleverypop(PyObject *self) {
+    // Keep count of operations and perform certain tasks every X number.
+    // For very large numbers of operations, pop_counter may roll over,
+    // which is ok for our purposes
+    unsigned counter = ((foo_bucketq *)self)->pop_counter++;
 
-    if (((foo_bucketq *)self)->logger == NULL) {
-
-        PyObject *logging = PyImport_ImportModule("logging");
-        if (logging == NULL) {
+    if ((((foo_bucketq *)self)->cleaning_strategy == CLEAN_PERIODICALLY) && (counter % CHECK_EVERY == 0)) {
+        if (foo_bucketq_periodic_check(self) != 0) {
             return -1;
         }
-        PyObject *logger = PyObject_CallMethod(logging, "getLogger", "(s)", "five_one_one_q.c");
-        if (logger == NULL) {
-            Py_DECREF(logging);
-            return -1;
-        }
-        ((foo_bucketq *)self)->logger = logger;
-        Py_DECREF(logging);
-
     }
 
     return 0;
 
 }
 
-static int foo_bucketq_log_debug(PyObject *self, PyObject *args) {
+static int foo_bucketq_periodic_check(PyObject *self) {
 
-    if (foo_bucketq_ensure_logger(self) != 0) {
+    int res;
+    PyObject *buckets = ((foo_bucketq *)self)->buckets;
+    Py_INCREF(buckets);
+
+    // count empty buckets
+    res = foo_bucketq_count_empty_buckets(self, buckets);
+    // error check
+    if (res < 0) {
+        Py_DECREF(buckets);
+        return -1;
+    }
+    // if we've exceeded the max number of empty buckets, change cleaning strategy to
+    // clearing buckets immediately after they become empty instead of periodically
+    if (res > MAX_EMPTY_BUCKETS) {
+        ((foo_bucketq *)self)->cleaning_strategy = CLEAN_ON_EMPTY;
+        res = foo_bucketq_clean_empty_buckets(self, buckets);
+        if (res < 0) {
+            Py_DECREF(buckets);
+            return -1;
+        }
+        PyObject *debug_args = Py_BuildValue(
+            "(sii)",
+            "Found %s empty buckets which exceeds the limit of %s, buckets will now be cleaned as soon as they become empty.",
+            res,
+            MAX_EMPTY_BUCKETS
+        );
+        if (foo_bucketq_log_debug(debug_args) != 0) {
+            Py_DECREF(buckets);
+            return -1;
+        }
+    }
+
+    Py_DECREF(buckets);
+
+    return 0;
+
+}
+
+static int foo_bucketq_count_empty_buckets(PyObject *self, PyObject *buckets) {
+
+    PyObject *bucket, *deq;
+    Py_ssize_t deqsize, ix;
+    int num_empty = 0;
+
+    for (ix = PyList_GET_SIZE(buckets)-1; ix >= 0; ix--) {
+        bucket = PyList_GET_ITEM(buckets, ix);
+        Py_INCREF(bucket);
+        deq = PyTuple_GET_ITEM(bucket, 1);
+        Py_DECREF(bucket);
+        Py_INCREF(deq);
+        deqsize = PyObject_Length(deq);
+        Py_DECREF(deq);
+        if (deqsize < 0) {
+            return -1;
+        }
+        if (deqsize == 0) {
+            num_empty++;
+        }
+    }
+
+    return num_empty;
+
+}
+
+static int foo_bucketq_clean_empty_buckets(PyObject *self, PyObject *buckets) {
+
+    PyObject *bucket, *deq;
+    Py_ssize_t deqsize, ix;
+    int num_empty = 0;
+
+    for (ix = PyList_GET_SIZE(buckets)-1; ix >= 0; ix--) {
+        bucket = PyList_GET_ITEM(buckets, ix);
+        Py_INCREF(bucket);
+        deq = PyTuple_GET_ITEM(bucket, 1);
+        Py_DECREF(bucket);
+        Py_INCREF(deq);
+        deqsize = PyObject_Length(deq);
+        Py_DECREF(deq);
+        if (deqsize < 0) {
+            return -1;
+        }
+        if (deqsize == 0) {
+            if (PyList_SetSlice(buckets, ix, ix+1, NULL) != 0) {
+                return -1;
+            }
+            num_empty++;
+        }
+    }
+
+    return num_empty;
+
+}
+
+// logging methods
+static int ensure_logging() {
+
+    if (_logger == NULL) {
+
+        _logging = PyImport_ImportModule("logging");
+        if (_logging == NULL) {
+            return -1;
+        }
+        _logger = PyObject_CallMethod(_logging, "getLogger", "(s)", "five_one_one_q.c");
+        if (_logger == NULL) {
+            Py_DECREF(_logging);
+            _logging = NULL;
+            return -1;
+        }
+        _logger_debug_str = PyUnicode_FromString("debug");
+        if (_logger_debug_str == NULL) {
+            Py_DECREF(_logging);
+            _logging = NULL;
+            Py_DECREF(_logger);
+            _logger = NULL;
+            return -1;
+        }
+    }
+
+    return 0;
+
+}
+
+static int foo_bucketq_log_debug(PyObject *args) {
+    // This function assumes `args` is not going to be used further by the caller
+    // and thus it "steals" the reference
+
+    if (args == NULL) {
         return -1;
     }
 
-    PyObject *logger = ((foo_bucketq *)self)->logger;
-    PyObject *debug_callable = PyObject_GetAttrString(logger, "debug");
+    if (ensure_logging() != 0) {
+        Py_DECREF(args);
+        return -1;
+    }
+
+    PyObject *debug_callable = PyObject_GetAttr(_logger, _logger_debug_str);
     if (debug_callable == NULL) {
+        Py_DECREF(args);
         return -1;
     }
 
     PyObject *res = PyObject_Call(debug_callable, args, NULL);
     if (res == NULL) {
+        Py_DECREF(args);
         Py_DECREF(debug_callable);
         return -1;
     }
 
+    Py_DECREF(args);
     Py_DECREF(debug_callable);
     Py_DECREF(res);
-    // note that we're stealing a reference to args
-    Py_DECREF(args);
 
     return 0;
 
@@ -526,7 +709,7 @@ static int foo_bucketq_log_debug_refcnt(PyObject *self, const char *label, PyObj
         return -1;
     }
 
-    return foo_bucketq_log_debug(self, debug_args);
+    return foo_bucketq_log_debug(debug_args);
 
 }
 
@@ -543,7 +726,7 @@ static int foo_bucketq_log_debug_healthcheck(PyObject *self) {
             return -1;
         }
 
-        if (foo_bucketq_log_debug(self, debug_args) != 0) {
+        if (foo_bucketq_log_debug(debug_args) != 0) {
             Py_DECREF(buckets);
             return -1;
         }

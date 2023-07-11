@@ -1,2 +1,3 @@
-from five_one_one_q.c import bucketq, LOWEST, HIGHEST
+from five_one_one_q.c import HIGHEST, LOWEST, bucketq
+
 from .queues import PriorityQueue

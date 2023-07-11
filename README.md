@@ -107,8 +107,32 @@ Will output the following:
 I have not seen unexpected exceptions raised by `await get()` or
 `await put(item)` in the current iteration. The order out is as expected.
 
-This library currently does not have a unit test suite. It is hoped that this
-is coming soon.
-
-This is a C-backed library meaning that object reference counts need to be
+TODO: This is a C-backed library meaning that object reference counts need to be
 handled manually. The library needs to be rigorously checked for memory leaks.
+
+### Test Suite
+
+The test suite depends on `pytest` and `pytest-asyncio`. To ensure that this
+library works "as advertised" the developer can run `make test`. Further test
+commands can be found in the Makefile, but these should not be necessary to
+run in most cases.
+
+### Performance Discussion
+
+"Under the hood", this queue is implemented as a list of 2-tuples of
+(priority, collections.deque), which we refer to as "buckets". Because
+repeatedly constructing and destructing deques has a performance cost, the
+queue will tolerate up to 20 empty buckets. Allowing empty buckets allows
+for good performance if some buckets tend to fluctuate between being empty
+and not empty.
+
+If the number of empty buckets exceeds 20, all empty buckets will be removed
+and the queue will change its cleaning strategy such that buckets will be
+removed immediately on becoming empty. This is intended to save memory if there
+are a large number of unique priorities.
+
+The "20 max empty buckets" behavior may become configurable after I study the
+performance tradeoffs more.
+
+In the future, I intend to write unit tests that directly compare this queue
+implementation with `asyncio.PriorityQueue`.

@@ -15,5 +15,15 @@ reinstall:
 	$(MAKE) uninstall
 	$(MAKE) install
 
-test: reinstall
-	python -m pytest
+test tests:
+	python -m pytest --durations=50 tests/test_basics.py tests/test_order.py
+
+# WARNING the following tests can take a very long time to run!
+test-async tests-async:
+	python -m pytest --durations=50 tests/test_async.py
+
+test-memory tests-memory:
+	python -m pytest --durations=50 tests/test_memory.py
+
+test-all tests-all:
+	python -m pytest --durations=50

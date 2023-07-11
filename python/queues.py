@@ -1,18 +1,14 @@
 import asyncio
 import operator
-import threading
 
-import five_one_one_q.c
-
-_global_lock = threading.Lock()
+from five_one_one_q.c import LOWEST, bucketq
 
 
 class PriorityQueue(asyncio.Queue):
-
     def __init__(
         self,
         key=operator.itemgetter(0),
-        first_out=five_one_one_q.c.LOWEST,
+        first_out=LOWEST,
         **kwargs,
     ):
         """
@@ -34,8 +30,14 @@ class PriorityQueue(asyncio.Queue):
                 `five_one_one_q.HIGHEST`. Defaults to LOWEST.
         """
         super().__init__(**kwargs)
-        self._first_out = first_out
-        self._queue = five_one_one_q.c.bucketq(key=key, first_out=first_out)
+        self._queue = bucketq(key=key, first_out=first_out)
+
+    @property
+    def first_out(self):
+        return self._queue.first_out
+
+    def empty(self):
+        return self._queue.empty()
 
     def _init(self, maxsize: int):
         pass
@@ -45,17 +47,3 @@ class PriorityQueue(asyncio.Queue):
 
     def _get(self):
         return self._queue.pop()
-
-    def _get_loop(self):
-        loop = asyncio.get_running_loop()
-        if self._loop is None:
-            with _global_lock:
-                if self._loop is None:
-                    self._loop = asyncio.get_running_loop()
-        if self._loop is not loop:
-            raise RuntimeError("Event loop changed!")
-        return loop
-
-    @property
-    def first_out(self):
-        return self._first_out

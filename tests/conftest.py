@@ -1,4 +1,5 @@
 import operator
+
 import pytest
 
 import five_one_one_q
