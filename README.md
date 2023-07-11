@@ -133,6 +133,3 @@ are a large number of unique priorities.
 
 The "20 max empty buckets" behavior may become configurable after I study the
 performance tradeoffs more.
-
-In the future, I intend to write unit tests that directly compare this queue
-implementation with `asyncio.PriorityQueue`.

@@ -1,5 +1,8 @@
 import asyncio
+import operator
+import random
 import sys
+from bisect import insort_right
 
 import pytest  # noqa
 
@@ -7,7 +10,9 @@ from five_one_one_q import HIGHEST, LOWEST
 from tests.utils import (
     counter_factory,
     parametrized_first_out,
+    parametrized_first_out_lowest,
     parametrized_maxsize,
+    parametrized_maxsize_and_unlimited,
     parametrized_unlimited,
     producer_factory,
 )
@@ -41,7 +46,15 @@ def check_expected(expected, actual):
 @parametrized_maxsize
 @pytest.mark.parametrize(
     "num_unique_priorities",
-    [1, 2, 3, 5, 10, 20, sys.maxsize],
+    (
+        1,
+        2,
+        3,
+        5,
+        10,
+        20,
+        sys.maxsize,
+    ),
 )
 @pytest.mark.asyncio
 async def test_order_variable_priorities(q, num_unique_priorities):
@@ -74,7 +87,15 @@ async def test_order_variable_priorities(q, num_unique_priorities):
 @parametrized_unlimited
 @pytest.mark.parametrize(
     "num_unique_priorities",
-    [1, 2, 3, 5, 10, 20, sys.maxsize],
+    (
+        1,
+        2,
+        3,
+        5,
+        10,
+        20,
+        sys.maxsize,
+    ),
 )
 @pytest.mark.asyncio
 async def test_order_variable_priorities_unlimited_maxsize(
@@ -110,7 +131,15 @@ async def test_order_variable_priorities_unlimited_maxsize(
 @parametrized_maxsize
 @pytest.mark.parametrize(
     "num_unique_priorities",
-    [1, 2, 3, 5, 10, 20, sys.maxsize],
+    (
+        1,
+        2,
+        3,
+        5,
+        10,
+        20,
+        sys.maxsize,
+    ),
 )
 @pytest.mark.asyncio
 async def test_order_variable_priorities_limited_maxsize_fifo(
@@ -146,7 +175,15 @@ async def test_order_variable_priorities_limited_maxsize_fifo(
 @parametrized_unlimited
 @pytest.mark.parametrize(
     "num_unique_priorities",
-    [1, 2, 3, 5, 10, 20, sys.maxsize],
+    (
+        1,
+        2,
+        3,
+        5,
+        10,
+        20,
+        sys.maxsize,
+    ),
 )
 @pytest.mark.asyncio
 async def test_order_variable_priorities_unlimited_maxsize_fifo(
@@ -176,3 +213,55 @@ async def test_order_variable_priorities_unlimited_maxsize_fifo(
 
     check_order(actual, q.first_out)
     check_expected(expected, actual)
+
+
+@parametrized_first_out_lowest
+@parametrized_maxsize_and_unlimited
+@pytest.mark.parametrize(
+    "num_unique_priorities",
+    (
+        1,
+        2,
+        3,
+        5,
+        8,
+        13,
+        21,
+        34,
+        55,
+    ),
+)
+@pytest.mark.asyncio
+async def test_order_randomized_put_get(
+    q,
+    num_unique_priorities,
+):
+    prod = counter_factory(num_unique_priorities=num_unique_priorities)
+    control = []
+    k = operator.itemgetter(0)
+
+    for _ in range(100_000):
+        if q.empty():
+            # must push if we are empty
+            item = prod()
+            await q.put(item)
+            insort_right(control, item, key=k)
+        elif q.full():
+            # must pop if we are full
+            q_item = await q.get()
+            c_item = control.pop(0)
+            assert q_item == c_item
+        elif random.randint(0, 2) != 0:
+            # if we get here, we can either push or pop
+            item = prod()
+            await q.put(item)
+            insort_right(control, item, key=k)
+        else:
+            q_item = await q.get()
+            c_item = control.pop(0)
+            assert q_item == c_item
+
+    while not q.empty():
+        q_item = await q.get()
+        c_item = control.pop(0)
+        assert q_item == c_item
