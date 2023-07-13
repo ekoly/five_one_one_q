@@ -95,10 +95,12 @@ async def test_order_many_put(
     pdiff = (slower_delta - faster_delta) / slower_delta * 100.0
 
     logger.info(
-        "Test: %s put operations, %s unique priorities:"
-        f"\n\t%s is faster with {faster_delta:.3f} seconds"
-        f"\n\t%s is slower with {slower_delta:.3f} seconds"
-        f"\n\t{pdiff:.3f}%% difference",
+        "Test: put operations on a large queue"
+        "\n\tnumber of put operations: %s"
+        "\n\tnumber of unique priorities: %s"
+        f"\n\tfaster: %s: \t{faster_delta:.3f} seconds"
+        f"\n\tslower: %s: \t{slower_delta:.3f} seconds"
+        f"\n\tdifference: {pdiff:.3f}%%",
         NUM_OPERATIONS,
         num_unique_priorities,
         faster,
@@ -163,10 +165,12 @@ async def test_order_many_get(
     pdiff = (slower_delta - faster_delta) / slower_delta * 100.0
 
     logger.info(
-        "Test: %s get operations, %s unique priorities:"
-        f"\n\t%s is faster with {faster_delta:.3f} seconds"
-        f"\n\t%s is slower with {slower_delta:.3f} seconds"
-        f"\n\t{pdiff:.3f}%% difference",
+        "Test: get operations on a large queue"
+        "\n\tnumber of get operations: %s"
+        "\n\tnumber of unique priorities: %s"
+        f"\n\tfaster: %s: \t{faster_delta:.3f} seconds"
+        f"\n\tslower: %s: \t{slower_delta:.3f} seconds"
+        f"\n\tdifference: {pdiff:.3f}%%",
         NUM_OPERATIONS,
         num_unique_priorities,
         faster,
@@ -204,7 +208,7 @@ async def test_order_randomized_put_get(
     for _ in range(NUM_OPERATIONS):
         # get operations are more likely if qsize is large
         # put operations are more likely if qsize is small
-        if random.randint(0, qsize // 10) == 0:
+        if random.randint(0, qsize // 10) < 3:
             control.append(("put", prod()))
             qsize += 1
         else:
@@ -244,10 +248,12 @@ async def test_order_randomized_put_get(
     pdiff = (slower_delta - faster_delta) / slower_delta * 100.0
 
     logger.info(
-        "Test: %s randomize put/get operations, %s unique priorities:"
-        f"\n\t%s is faster with {faster_delta:.3f} seconds"
-        f"\n\t%s is slower with {slower_delta:.3f} seconds"
-        f"\n\t{pdiff:.3f}%% difference",
+        "Test: randomized put/get operations"
+        "\n\tnumber of randomized put/get operations: %s"
+        "\n\tnumber of unique priorities: %s"
+        f"\n\tfaster: %s: \t{faster_delta:.3f} seconds"
+        f"\n\tslower: %s: \t{slower_delta:.3f} seconds"
+        f"\n\tdifference: {pdiff:.3f}%%",
         NUM_OPERATIONS,
         num_unique_priorities,
         faster,

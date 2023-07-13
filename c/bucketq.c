@@ -503,7 +503,9 @@ static PyObject *foo_bucketq_pop_imp(PyObject *self, PyObject *buckets) {
         return NULL;
     }
 
-    if (ix > MAX_EMPTY_BUCKETS) {
+    // if ix == max_empty_buckets then the min number of empty buckets is
+    // max_empty_buckets + 1
+    if (ix >= MAX_EMPTY_BUCKETS) {
         // force an empty bucket check if we are accumulating a lot of empty buckets
         if (foo_bucketq_periodic_check(self) != 0) {
             return NULL;

@@ -119,6 +119,92 @@ run in most cases.
 
 ### Performance Discussion
 
+Performance against the builtin `asyncio.PriorityQueue` can be analyzed by
+running `make test-performance` and then looking at `performance.log`.
+(Expanding and improving these tests is currently being worked on.)
+
+Key takeaways are discussed below.
+
+#### Randomized operations, small queue, small number of unique priorities
+
+`five_one_one_q.PriorityQueue` is moderately faster.
+```
+2023-07-12 23:25:01,346 | INFO | Test: randomized put/get operations
+	number of randomized put/get operations: 100000
+	number of unique priorities: 2
+	faster: five one one: 	0.059 seconds
+	slower: asyncio: 	0.071 seconds
+	difference: 16.971%
+```
+
+#### Randomized operations, small queue, large number of unique priorities
+
+`asyncio.PriorityQueue` is moderately faster.
+```
+2023-07-12 23:25:03,717 | INFO | Test: randomized put/get operations
+	number of randomized put/get operations: 100000
+	number of unique priorities: 9223372036854775807
+	faster: asyncio: 	0.076 seconds
+	slower: five one one: 	0.103 seconds
+	difference: 26.224%
+```
+
+#### `put`/`push`, large queue, small number of unique priorities
+
+`asyncio.PriorityQueue` is slightly faster.
+```
+2023-07-12 23:24:49,634 | INFO | Test: put operations on a large queue
+	number of put operations: 100000
+	number of unique priorities: 2
+	faster: asyncio: 	0.056 seconds
+	slower: five one one: 	0.057 seconds
+	difference: 1.239%
+```
+
+#### `put`/`push`, large queue, large number of unique priorities
+
+`asyncio.PriorityQueue` is significantly faster.
+```
+2023-07-12 23:24:52,767 | INFO | Test: put operations on a large queue
+	number of put operations: 100000
+	number of unique priorities: 9223372036854775807
+	faster: asyncio: 	0.062 seconds
+	slower: five one one: 	1.596 seconds
+	difference: 96.107%
+```
+
+#### `get`/`pop`, large queue, small number of unique priorities
+
+`five_one_one_q.PriorityQueue` is significantly faster.
+```
+2023-07-12 23:24:53,584 | INFO | Test: get operations on a large queue
+	number of get operations: 100000
+	number of unique priorities: 2
+	faster: five one one: 	0.047 seconds
+	slower: asyncio: 	0.169 seconds
+	difference: 71.880%
+```
+
+#### `get`/`pop`, large queue, large number of unique priorities
+`asyncio.PriorityQueue` is significantly faster.
+```
+2023-07-12 23:25:00,921 | INFO | Test: get operations on a large queue
+	number of get operations: 100000
+	number of unique priorities: 9223372036854775807
+	faster: asyncio: 	0.246 seconds
+	slower: five one one: 	1.607 seconds
+	difference: 84.727%
+```
+
+#### Conclusion
+
+`five_one_one_q.PriorityQueue` performs well with a small number of unique
+priorities. However I recommend using it first and foremost for the usefulness
+of the `key` and `first_out` keyword arguments, and potential performance
+boosts second.
+
+### Implementation Details
+
 "Under the hood", this queue is implemented as a list of 2-tuples of
 (priority, collections.deque), which we refer to as "buckets". Because
 repeatedly constructing and destructing deques has a performance cost, the
